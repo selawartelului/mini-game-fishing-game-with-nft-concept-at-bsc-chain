@@ -1,0 +1,105 @@
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract BSCFishingGame is ERC721, Ownable {
+
+    uint256 public nextTokenId = 1;
+    uint256 public fishingFee = 0.001 ether;
+    uint256 public rodPrice = 0.01 ether;
+
+    mapping(address => bool) public hasRod;
+    mapping(uint256 => string) public fishType;
+    mapping(uint256 => uint256) public fishRarity;
+
+    event RodPurchased(address indexed player);
+    event FishCaught(
+        address indexed player,
+        uint256 tokenId,
+        string fish,
+        uint256 rarity
+    );
+
+    constructor()
+        ERC721("BSC Fishing NFT", "BFISH")
+        Ownable(msg.sender)
+    {}
+
+    // Buy fishing rod
+    function buyRod() external payable {
+        require(!hasRod[msg.sender], "Already own rod");
+        require(msg.value >= rodPrice, "Insufficient BNB");
+
+        hasRod[msg.sender] = true;
+
+        emit RodPurchased(msg.sender);
+    }
+
+    // Fishing game
+    function fish() external payable {
+        require(hasRod[msg.sender], "Need fishing rod");
+        require(msg.value >= fishingFee, "Pay fishing fee");
+
+        uint256 random = uint256(
+            keccak256(
+                abi.encodePacked(
+                    block.prevrandao,
+                    block.timestamp,
+                    msg.sender,
+                    nextTokenId
+                )
+            )
+        ) % 100;
+
+        string memory name;
+        uint256 rarity;
+
+        if (random < 50) {
+            name = "Small Fish";
+            rarity = 1;
+        } else if (random < 75) {
+            name = "Salmon";
+            rarity = 2;
+        } else if (random < 90) {
+            name = "Tuna";
+            rarity = 3;
+        } else if (random < 98) {
+            name = "Golden Fish";
+            rarity = 4;
+        } else {
+            name = "Dragon Fish";
+            rarity = 5;
+        }
+
+        uint256 tokenId = nextTokenId++;
+
+        fishType[tokenId] = name;
+        fishRarity[tokenId] = rarity;
+
+        _safeMint(msg.sender, tokenId);
+
+        emit FishCaught(
+            msg.sender,
+            tokenId,
+            name,
+            rarity
+        );
+    }
+
+    // Change fishing fee
+    function setFishingFee(uint256 fee)
+        external onlyOwner
+    {
+        fishingFee = fee;
+    }
+
+    // Withdraw BNB
+    function withdraw()
+        external onlyOwner
+    {
+        payable(owner()).transfer(address(this).balance);
+    }
+}
